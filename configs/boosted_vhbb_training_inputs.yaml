@@ -1,0 +1,434 @@
+# Boosted VHbb v1 training contract.
+# v1 = one merged boosted-SR phase space, two-fold even/odd production,
+# and a required comparison between plain DNN and ParT-Lite+MHA.
+
+project:
+  name: VHbb-Boost-Training
+  task: boosted_vhbb_svb
+  version: v1_merged_sr_dnn_vs_partlite_mha
+  owner_note: >
+    ChatGPT writes plans/configs/code through the mounted repo only. Local lxplus
+    agent handles execution, GPU jobs, Condor, and git push/pull.
+
+paths:
+  repo_root: /home/lzhang/lxplus/columns_final/VHbb-Boost-Training
+  columns_root: /home/lzhang/lxplus/columns_final/columns_mount
+  reference_repo: /home/lzhang/lxplus/columns_final/tch_2026
+  output_root: outputs/runs
+  manifest_root: outputs/manifests
+  plot_root: outputs/plots
+
+phase_space:
+  name: merged_boosted_SR_v1
+  policy: merge_all_boosted_signal_regions
+  description: >
+    All nominal boosted SR parquets are combined into one inclusive boosted training
+    phase space. Region/channel/pTV/jet-bin labels are retained for monitoring and
+    validation, not for splitting into independent v1 trainings.
+  include_region_patterns:
+    - "SR_*_boosted*"
+  parquet_glob: "{columns_root}/*/SR_*_boosted*/nominal.parquet"
+  train_separate_models_by_region: false
+  train_separate_models_by_channel: false
+  train_separate_models_by_pTV_bin: false
+
+inputs:
+  layout: sample_region_nominal_parquet
+  file_metadata_from_path:
+    sample_name: path_component_1_under_columns_root
+    region_name: path_component_2_under_columns_root
+    variation: nominal
+  parse_from_region_name:
+    channel:
+      Znn: "SR_Znn_*"
+      Wenu: "SR_Wenu_*"
+      Wmnu: "SR_Wmnu_*"
+      Zee: "SR_Zee_*"
+      Zmm: "SR_Zmm_*"
+    lepton_category:
+      Znn: 0lep
+      Wenu: 1lep
+      Wmnu: 1lep
+      Zee: 2lep
+      Zmm: 2lep
+    reco_pTV_bin:
+      250_400: "*_250_400_*"
+      400_600: "*_400_600_*"
+      GT400: "*_GT400_*"
+      GT600: "*_GT600_*"
+    reco_jet_bin:
+      0J: "*_0J"
+      1J: "*_1J"
+      GE2J: "*_GE2J"
+      GT1J: "*_GT1J"
+      inclusive: fallback
+
+sample_groups:
+  signal_VH_Hbb:
+    label: 1
+    include_patterns:
+      - "*WplusH*Hto2B*"
+      - "*WminusH*Hto2B*"
+      - "*ZH*Hto2B*"
+      - "*ggZH*Hto2B*"
+    exclude_patterns:
+      - "*Hto2C*"
+  signal_VH_Hcc_optional:
+    label: null
+    include_patterns:
+      - "*Hto2C*"
+    use: diagnostics_only_for_v1
+  background_Vjets:
+    label: 0
+    include_patterns:
+      - "*WJets*"
+      - "*WtoLNu*Jets*"
+      - "*DYto2*"
+      - "*ZJets*"
+      - "*Zto2Nu*Jets*"
+  background_top:
+    label: 0
+    include_patterns:
+      - "*TT*"
+      - "*tt*"
+      - "*SingleTop*"
+      - "*ST_*"
+  background_diboson:
+    label: 0
+    include_patterns:
+      - "*WW*"
+      - "*WZ*"
+      - "*ZZ*"
+  background_qcd_optional:
+    label: 0
+    include_patterns:
+      - "*QCD*"
+    use: include_only_if_present_and_non_negligible
+
+labels:
+  task: binary
+  positive_class: signal_VH_Hbb
+  negative_classes:
+    - background_Vjets
+    - background_top
+    - background_diboson
+    - background_qcd_optional
+  output_scores:
+    dnn: score_dnn_v1
+    partlite_mha: score_partlite_mha_v1
+
+features:
+  column_map_status: to_be_filled_after_column_inspection
+  required_minimum:
+    - ak8_pt
+    - ak8_eta
+    - ak8_msoftdrop
+    - ak8_bb_tag_score
+    - V_pt
+    - event_weight
+  monitoring_metadata:
+    - sample_name
+    - region_name
+    - channel
+    - lepton_category
+    - reco_pTV_bin
+    - reco_jet_bin
+    - year
+    - era
+  default_model_input_policy:
+    channel_metadata_as_inputs: false
+    region_metadata_as_inputs: false
+    pTV_bin_metadata_as_inputs: false
+    jet_bin_metadata_as_inputs: false
+    note: >
+      For v1, all SRs are one phase space. Metadata is retained for plotting and
+      stability checks. If a model needs channel masks for missing features, document
+      that explicitly in the run config.
+  high_level_groups:
+    ak8_candidate:
+      required_if_available:
+        - ak8_pt
+        - ak8_eta
+        - ak8_phi
+        - ak8_mass
+        - ak8_msoftdrop
+        - ak8_bb_tag_score
+      optional:
+        - ak8_hcc_tag_score
+        - ak8_tau21
+        - ak8_tau32
+        - ak8_n2b1
+        - ak8_subjet1_pt
+        - ak8_subjet1_eta
+        - ak8_subjet1_btag
+        - ak8_subjet2_pt
+        - ak8_subjet2_eta
+        - ak8_subjet2_btag
+    vector_boson:
+      required_if_available:
+        - V_pt
+        - V_eta
+        - V_phi
+      optional:
+        - MET_pt
+        - MET_phi
+        - lep1_pt
+        - lep1_eta
+        - lep1_phi
+        - lep2_pt
+        - lep2_eta
+        - lep2_phi
+    topology:
+      optional:
+        - n_ak4_jets
+        - n_additional_jets
+        - n_btagged_ak4_jets
+        - n_soft_activity_jets
+        - ht
+        - min_dphi_met_jets
+    resolved_overlap:
+      optional:
+        - has_resolved_candidate
+        - resolved_hbb_pt
+        - resolved_hbb_mass
+        - resolved_hbb_dr
+        - resolved_lead_btag
+        - resolved_sublead_btag
+        - resolved_dijet_score
+    derived_angular:
+      derive_if_missing: true
+      optional:
+        - dphi_V_AK8
+        - deta_V_AK8
+        - dR_V_AK8
+        - dphi_MET_AK8
+  forbidden_model_inputs:
+    - sample_name
+    - region_name
+    - event_weight
+    - gen_weight
+    - xsec_weight
+    - stxs_bin
+    - truth_process
+    - truth_pTV_bin
+    - truth_njet_bin
+    - gen_H_pt
+    - gen_V_pt
+    - fold
+    - is_internal_validation
+
+bookkeeping_columns:
+  required_or_derive:
+    - sample_name
+    - region_name
+    - label
+    - process_group
+    - signed_event_weight
+    - training_weight
+    - fold
+    - internal_train_or_val
+  optional:
+    - run
+    - luminosityBlock
+    - event
+    - year
+    - era
+    - stxs_bin
+    - truth_process
+    - truth_pTV_bin
+    - truth_njet_bin
+
+weights:
+  loss_weight: abs_event_weight
+  validation_weights:
+    ml_metrics: abs_event_weight
+    physics_histograms: signed_event_weight
+  class_balancing: normalize_total_abs_weight_per_class_per_epoch
+  process_balancing: normalize_total_abs_weight_per_process_group_then_class
+  negative_weights:
+    svb_policy: use_abs_weight_for_loss_preserve_signed_for_validation
+    separate_future_project: negative_weight_reweighting
+
+folding:
+  strategy: two_fold_even_odd_out_of_fold
+  no_final_test_dataset: true
+  fold_definition:
+    preferred: "event % 2"
+    fallback: "stable_hash(sample_name, region_name, row_index) % 2"
+  production:
+    fold_even_application:
+      train_on: odd
+      apply_to: even
+    fold_odd_application:
+      train_on: even
+      apply_to: odd
+  internal_validation:
+    fraction_of_training_side: 0.15
+    method: deterministic_hash_within_training_side
+    purpose:
+      - early_stopping
+      - loss_curve
+      - overtraining_monitoring
+  output_policy:
+    final_score: out_of_fold_only
+    combine_even_odd_outputs: true
+
+models:
+  boosted_plain_dnn_v1:
+    role: required_comparison_baseline
+    type: pytorch_plain_dnn
+    input_type: flat_high_level
+    output:
+      type: binary_logit
+      score_name: score_dnn_v1
+    loss: BCEWithLogitsLoss_weighted
+    architecture:
+      input_norm: standardize_from_training_side
+      layers:
+        - {units: 256, activation: GELU, norm: LayerNorm, dropout: 0.05}
+        - {units: 256, activation: GELU, norm: LayerNorm, dropout: 0.05}
+        - {units: 128, activation: GELU, norm: LayerNorm, dropout: 0.05}
+        - {units: 64, activation: GELU, norm: LayerNorm, dropout: 0.05}
+        - {units: 32, activation: GELU, norm: null, dropout: 0.0}
+        - {units: 1, activation: none}
+    optimizer:
+      name: AdamW
+      lr: 0.001
+      weight_decay: 0.0001
+    scheduler:
+      name: ReduceLROnPlateau
+      monitor: val_loss
+    training:
+      batch_size: 8192
+      max_epochs: 100
+      early_stopping_patience: 10
+      mixed_precision: true
+
+  boosted_partlite_mha_v1:
+    role: target_improved_model
+    type: pytorch_partlite_mha
+    output:
+      type: binary_logit
+      score_name: score_partlite_mha_v1
+    modes:
+      high_level_token_mha:
+        use_when: low_level_jagged_inputs_not_available
+        token_groups:
+          - ak8_candidate
+          - vector_boson
+          - lepton_met
+          - topology
+          - resolved_overlap_optional
+        token_embedding_dim: 64
+        mha_blocks: 2
+        attention_heads: 4
+        classifier_head: small_mlp
+      ak8_particle_cloud_partlite:
+        use_when: ak8_constituent_and_sv_arrays_available
+        particles:
+          max_count: 64
+          features: to_be_filled_after_column_inspection
+        secondary_vertices:
+          max_count: 8
+          features: to_be_filled_after_column_inspection
+        global_features: same_high_level_features_as_dnn
+        embed_dim: 64
+        mha_blocks: 2
+        attention_heads: 4
+        classifier_head: small_mlp
+    reference: /home/lzhang/lxplus/columns_final/tch_2026/particle_transformer
+    loss: BCEWithLogitsLoss_weighted
+    optimizer:
+      name: AdamW
+      lr: 0.001
+      weight_decay: 0.0001
+    training:
+      batch_size: 2048
+      max_epochs: 100
+      early_stopping_patience: 10
+      mixed_precision: true
+
+visualization:
+  required_at_every_stage: true
+  input_manifest_plots:
+    - n_files_by_process_group.png
+    - n_events_by_process_group.png
+    - sum_abs_weight_by_process_group.png
+    - sum_signed_weight_by_process_group.png
+    - n_events_by_region.png
+    - sum_weight_by_region.png
+    - fold_balance_even_odd.png
+  feature_plots:
+    - feature_distribution_signal_vs_background
+    - feature_distribution_by_process_group
+    - feature_correlation_matrix_dnn_inputs.png
+    - missing_value_fraction_by_feature.png
+  training_plots_per_model_per_fold:
+    - loss_curve.png
+    - auc_curve.png
+    - learning_rate_curve.png
+    - score_train_vs_internal_val.png
+    - overtraining_ks.json
+  out_of_fold_comparison_plots:
+    - roc_dnn_vs_partlite_mha.png
+    - sic_dnn_vs_partlite_mha.png
+    - score_dnn_vs_partlite_mha_2d.png
+    - score_distribution_by_class_dnn.png
+    - score_distribution_by_class_partlite_mha.png
+    - score_by_process_group_comparison.png
+  physics_transparency_plots:
+    - score_by_channel.png
+    - score_by_reco_pTV_bin.png
+    - score_by_reco_jet_bin.png
+    - background_composition_by_score_bin.png
+    - signed_yield_by_score_bin.png
+    - ak8_msoftdrop_in_score_quantiles.png
+    - ak8_bb_tag_score_in_score_quantiles.png
+    - V_pt_in_score_quantiles.png
+  fold_closure_plots:
+    - score_even_vs_odd_by_class.png
+    - score_even_vs_odd_by_region.png
+    - auc_even_vs_odd.json
+    - fold_yield_closure.json
+
+implementation_milestones:
+  - id: M0
+    name: manifest_and_column_report
+    deliverables:
+      - scripts/build_manifest.py
+      - scripts/inspect_columns.py
+      - outputs/manifests/boosted_v1_manifest.json
+      - outputs/manifests/column_report.json
+      - outputs/plots/inputs
+  - id: M1
+    name: feature_map_and_pretraining_visualization
+    deliverables:
+      - configs/boosted_vhbb_training_inputs.yaml
+      - src/vhbb_boost/features.py
+      - scripts/plot_input_features.py
+      - outputs/plots/features
+  - id: M2
+    name: two_fold_dataset_and_dataloader
+    deliverables:
+      - src/vhbb_boost/data.py
+      - src/vhbb_boost/weights.py
+      - src/vhbb_boost/folds.py
+  - id: M3
+    name: plain_dnn_training
+    deliverables:
+      - src/vhbb_boost/models/dnn.py
+      - scripts/train_dnn.py
+      - scripts/apply_dnn_oof.py
+  - id: M4
+    name: partlite_mha_training
+    deliverables:
+      - src/vhbb_boost/models/partlite_mha.py
+      - scripts/train_partlite_mha.py
+      - scripts/apply_partlite_mha_oof.py
+  - id: M5
+    name: comparison_and_physics_validation
+    deliverables:
+      - scripts/compare_models.py
+      - scripts/plot_score_shapes.py
+      - scripts/plot_mass_sculpting.py
+      - outputs/comparisons/dnn_vs_partlite_mha_v1
