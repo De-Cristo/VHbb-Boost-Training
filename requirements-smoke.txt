@@ -1,9 +1,24 @@
-# Minimal Python dependencies for scripts/smoke_one_sr_dnn.py
-# On lxplus, prefer an LCG CUDA/PyTorch view when using GPU.
+# Reference dependency list for scripts/smoke_one_sr_dnn.py
+#
+# On lxplus, do NOT install these with pip. Instead source the LCG CUDA view:
+#
+#   source /cvmfs/sft.cern.ch/lcg/views/LCG_110_cuda/x86_64-el9-gcc13-opt/setup.sh
+#
+# The local-agent report confirmed that this view already provides:
+#   python 3.13.11
+#   torch 2.11.0 with CUDA 12.5
+#   numpy 2.4.4
+#   pandas 2.2.3
+#   pyarrow 24.0.0
+#   matplotlib
+#   PyYAML
+#
+# Keep this file as documentation for the needed packages. Do not use it to pip
+# install torch on lxplus.
 
-numpy
-pandas
-pyarrow
-matplotlib
-PyYAML
-torch
+# numpy
+# pandas
+# pyarrow
+# matplotlib
+# PyYAML
+# torch

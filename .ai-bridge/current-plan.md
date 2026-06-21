@@ -1,35 +1,62 @@
-# Start one-SR boosted VHbb DNN smoke test
+# Use LCG-backed venv and start one-SR DNN smoke training
 
-Updated: 2026-06-21T21:17:03.032Z
+Updated: 2026-06-21T21:33:37.612Z
 Workspace: /home/lzhang/lxplus/columns_final/VHbb-Boost-Training
 Target agent: lxplus local agent (custom)
 
 ## Plan
 
-You are the lxplus local implementation agent for the `VHbb-Boost-Training` repository.
+Read the local-agent environment report and use the venv policy now added to the repo.
 
-Your first job is not to implement the full v1 framework. Your first job is to run and debug the one-SR DNN smoke workflow that ChatGPT has already written.
+Start by reading:
 
-Start by reading these files, in this order:
+1. `docs/lxplus_venv_training_start.md`
+2. `README.md`
+3. `configs/smoke_one_sr_dnn.yaml`
+4. `scripts/smoke_one_sr_dnn.py`
+5. `.ai-bridge/boosted_training_handoff.md`
 
-1. `.ai-bridge/boosted_training_handoff.md`
-2. `configs/smoke_one_sr_dnn.yaml`
-3. `scripts/smoke_one_sr_dnn.py`
-4. `README.md`
-5. `docs/boosted_vhbb_training_model_inputs.md`
-6. `configs/boosted_vhbb_training_inputs.yaml`
+Environment conclusion from your report:
 
-Immediate goal:
+- Host `lxplus901.cern.ch` has a Tesla T4 GPU with 15.6 GB VRAM.
+- `nvidia-smi` works and GPU matmul passed.
+- `LCG_110_cuda` provides Python 3.13.11, torch 2.11.0, CUDA 12.5, numpy, pandas, pyarrow, matplotlib, and PyYAML.
+- Do not use bare system Python 3.9.
+- Do not pip-install torch.
 
-Run a small one-SR smoke test using real parquet files from EOS:
+Use this venv policy:
 
-`/eos/cms/store/group/phys_higgs/hbb/VHbbResults/Run3VHbbResults/ntuples/VHBB_Parquets/output_VHbb_STXS_boosted_svb_2024_0619_condor@lxplus/columns_final`
+```bash
+cd /afs/cern.ch/work/l/lichengz/private/VHbb-Training/VHbb-Boost-Training
 
-Default region:
+source /cvmfs/sft.cern.ch/lcg/views/LCG_110_cuda/x86_64-el9-gcc13-opt/setup.sh
+python3 -m venv --system-site-packages .venv/lcg110-cuda
+source .venv/lcg110-cuda/bin/activate
+python3 -m pip install --upgrade pip
+```
 
-`SR_Wenu_250_400_boosted_0J`
+For every new shell after setup:
 
-Step 1: inspect-only branch/feature/plot test. Run from the repo root:
+```bash
+source /cvmfs/sft.cern.ch/lcg/views/LCG_110_cuda/x86_64-el9-gcc13-opt/setup.sh
+source .venv/lcg110-cuda/bin/activate
+```
+
+Verify:
+
+```bash
+python3 - <<'PY'
+import torch, sys
+print(sys.version)
+print(torch.__version__)
+print(torch.version.cuda)
+print(torch.cuda.is_available())
+if torch.cuda.is_available():
+    print(torch.cuda.get_device_name(0))
+PY
+```
+
+Then run inspect-only first:
 
 ```bash
 python3 scripts/smoke_one_sr_dnn.py \
@@ -40,24 +67,7 @@ python3 scripts/smoke_one_sr_dnn.py \
   --inspect-only
 ```
 
-Then inspect these outputs:
-
-- `outputs/smoke_one_sr_dnn/<timestamp>_<region>/manifest.json`
-- `outputs/smoke_one_sr_dnn/<timestamp>_<region>/branch_report.json`
-- `outputs/smoke_one_sr_dnn/<timestamp>_<region>/selected_branches.json`
-- `outputs/smoke_one_sr_dnn/<timestamp>_<region>/sample_summary.json`
-- `outputs/smoke_one_sr_dnn/<timestamp>_<region>/plots/feature_svb_raw/*.png`
-
-Check whether:
-
-- signal and background files are both discovered;
-- the selected region exists for enough samples;
-- the selected weight column is sensible;
-- the selected event column is sensible, or the stable-hash fallback is used;
-- feature plots are produced and not obviously broken;
-- selected features do not include truth/gen/sample/weight/leakage columns.
-
-Step 2: if inspect-only is reasonable, run DNN smoke training:
+Check output JSONs and feature plots. If the branch/feature/weight selection looks good, run:
 
 ```bash
 python3 scripts/smoke_one_sr_dnn.py \
@@ -70,39 +80,18 @@ python3 scripts/smoke_one_sr_dnn.py \
   --device auto
 ```
 
-Use a GPU-capable lxplus environment if available. `--device auto` should use CUDA if PyTorch sees a GPU, otherwise CPU.
+Report back:
 
-Inspect these training outputs:
-
-- `preprocess_stats.json`
-- `training_history.json`
-- `metrics.json`
-- `checkpoints/model.pt`
-- `plots/training_curves.png`
-- `plots/scores/score_distribution_validation.png`
-- `plots/scores/roc_validation.png`
-- `plots/scores/sic_validation.png`
-- `scored_validation.parquet`
-
-Important debugging priorities:
-
-1. If no files are found, check actual region names under the EOS path and update `configs/smoke_one_sr_dnn.yaml` or rerun with `--region <existing_region>`.
-2. If the selected weight column is wrong, update `features.weight_candidates` in `configs/smoke_one_sr_dnn.yaml`.
-3. If feature selection includes bad columns, update `features.forbidden_patterns`.
-4. If too many useless columns survive, tighten `features.preferred_patterns` or add an explicit feature allowlist.
-5. If training is unstable, first reduce `fraction`, lower `batch_size`, or inspect `preprocess_stats.json` for dropped/pathological columns.
-6. Do not implement ParT-Lite yet. First make this one-SR DNN smoke workflow run cleanly.
-
-After running, report back:
-
+- whether venv setup succeeded;
+- `torch.cuda.is_available()` and GPU name;
 - exact command used;
 - number of files/events discovered;
 - selected weight column;
 - selected event/fold column;
-- number of selected features before and after preprocessing;
-- validation AUC/loss from `metrics.json`;
-- whether the score and feature plots look reasonable;
-- any errors or traceback.
+- selected features before and after preprocessing;
+- validation loss/AUC from `metrics.json`;
+- whether feature/score plots look reasonable;
+- errors, warnings, or traceback.
 
 ## Implementation contract
 
