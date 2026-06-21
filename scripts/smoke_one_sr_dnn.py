@@ -132,28 +132,27 @@ def find_parquet_files(columns_root: Path, region: str, sample_cfg: Dict[str, An
             continue
         process_group, label = cls
 
-        region_dir = sample_dir / region
-        if not region_dir.exists() or not region_dir.is_dir():
-            continue
-
-        files = sorted(region_dir.rglob("*.parquet"))
-        for path in files:
-            try:
-                columns, _, n_rows = parquet_schema(path)
-            except Exception as exc:
-                print(f"[WARN] Failed to read parquet schema: {path}: {exc}")
-                continue
-            records.append(
-                FileRecord(
-                    path=str(path),
-                    sample_name=sample_name,
-                    region_name=region,
-                    process_group=process_group,
-                    label=label,
-                    n_rows=n_rows,
-                    columns=columns,
+        region_dirs = [p for p in sample_dir.iterdir() if p.is_dir() and fnmatch.fnmatch(p.name, region)]
+        for region_dir in region_dirs:
+            actual_region = region_dir.name
+            files = sorted(region_dir.rglob("*.parquet"))
+            for path in files:
+                try:
+                    columns, _, n_rows = parquet_schema(path)
+                except Exception as exc:
+                    print(f"[WARN] Failed to read parquet schema: {path}: {exc}")
+                    continue
+                records.append(
+                    FileRecord(
+                        path=str(path),
+                        sample_name=sample_name,
+                        region_name=actual_region,
+                        process_group=process_group,
+                        label=label,
+                        n_rows=n_rows,
+                        columns=columns,
+                    )
                 )
-            )
     return records
 
 
@@ -587,7 +586,9 @@ def weighted_auc(y_true: np.ndarray, score: np.ndarray, weight: np.ndarray) -> f
         return float("nan")
     tpr = np.r_[0.0, np.cumsum(w * pos) / sum_pos]
     fpr = np.r_[0.0, np.cumsum(w * neg) / sum_neg]
-    return float(np.trapz(tpr, fpr))
+    if hasattr(np, "trapezoid"):
+        return float(np.trapezoid(tpr, x=fpr))
+    return float(np.trapz(tpr, x=fpr))
 
 
 def evaluate_model(
