@@ -1,0 +1,166 @@
+# One-SR boosted VHbb DNN smoke-test config.
+# Intended use on lxplus/local agent side only. ChatGPT writes the code/config,
+# but does not execute lxplus, EOS, Condor, or GPU jobs.
+
+paths:
+  # Real lxplus/EOS path requested by the user.
+  eos_columns_root: /eos/cms/store/group/phys_higgs/hbb/VHbbResults/Run3VHbbResults/ntuples/VHBB_Parquets/output_VHbb_STXS_boosted_svb_2024_0619_condor@lxplus/columns_final
+
+  # ChatGPT-visible mounted path, useful if the local app exposes the same files here.
+  mounted_columns_root: /home/lzhang/lxplus/columns_final/columns_mount
+
+  output_dir: outputs/smoke_one_sr_dnn
+
+selection:
+  # Pick one SR for the first smoke test. Override from CLI with --region.
+  region: SR_Wenu_250_400_boosted_0J
+
+  # Small random fraction per parquet file. Override with --fraction.
+  fraction: 0.02
+
+  # Safety cap after sampling, applied separately for signal and background.
+  max_events_per_class: 50000
+
+  # Limit files per process group for very fast debugging. null means no limit.
+  max_files_per_group: null
+
+samples:
+  signal_VH_Hbb:
+    label: 1
+    include_patterns:
+      - "*WplusH*Hto2B*"
+      - "*WminusH*Hto2B*"
+      - "*ZH*Hto2B*"
+      - "*ggZH*Hto2B*"
+    exclude_patterns:
+      - "*Hto2C*"
+
+  background_Vjets:
+    label: 0
+    include_patterns:
+      - "*WJets*"
+      - "*WtoLNu*Jets*"
+      - "*DYto2*"
+      - "*ZJets*"
+      - "*Zto2Nu*Jets*"
+
+  background_top:
+    label: 0
+    include_patterns:
+      - "*TT*"
+      - "*tt*"
+      - "*SingleTop*"
+      - "*ST_*"
+
+  background_diboson:
+    label: 0
+    include_patterns:
+      - "*WW*"
+      - "*WZ*"
+      - "*ZZ*"
+
+  background_qcd_optional:
+    label: 0
+    include_patterns:
+      - "*QCD*"
+    optional: true
+
+features:
+  # If any of these candidate names are found, they are prioritized.
+  # The script also falls back to auto-selecting safe numeric columns.
+  preferred_patterns:
+    - "*ak8*pt*"
+    - "*ak8*eta*"
+    - "*ak8*phi*"
+    - "*ak8*mass*"
+    - "*softdrop*"
+    - "*msoftdrop*"
+    - "*particleNet*"
+    - "*ParticleNet*"
+    - "*deepAK8*"
+    - "*DeepAK8*"
+    - "*bbVs*"
+    - "*bbvs*"
+    - "*V*pt*"
+    - "*MET*pt*"
+    - "*met*pt*"
+    - "*lep*pt*"
+    - "*lep*eta*"
+    - "*nJet*"
+    - "*njet*"
+    - "*btag*"
+    - "*BTag*"
+    - "*dphi*"
+    - "*dPhi*"
+    - "*deta*"
+    - "*dEta*"
+    - "*dr*"
+    - "*dR*"
+
+  # Columns matching these patterns are never used as model features.
+  forbidden_patterns:
+    - "*weight*"
+    - "*Weight*"
+    - "*genWeight*"
+    - "*event*"
+    - "*Event*"
+    - "*run*"
+    - "*Run*"
+    - "*luminosityBlock*"
+    - "*sample*"
+    - "*region*"
+    - "*label*"
+    - "*stxs*"
+    - "*STXS*"
+    - "*truth*"
+    - "*gen*"
+    - "*Gen*"
+
+  # Candidate weight columns. First existing column is used.
+  weight_candidates:
+    - weight
+    - event_weight
+    - EventWeight
+    - nominal_weight
+    - nominalWeight
+    - genWeight
+    - genWeight_nominal
+
+  # If no weight column is found, use unit weights and write a warning.
+  allow_unit_weights_if_missing: true
+
+preprocessing:
+  clip_quantiles: [0.001, 0.999]
+  impute: median
+  scale: standard
+  remove_constant_features: true
+  min_finite_fraction: 0.50
+
+folding:
+  # For smoke training only, train a single model on one side and validate on the other.
+  # The final v1 production code will train both even/odd models.
+  fold_definition:
+    preferred: "event % 2"
+    fallback: "stable_hash(sample_name, region_name, local_row_index) % 2"
+  smoke_train_on_fold: odd
+  smoke_validate_on_fold: even
+
+training:
+  model_name: smoke_plain_dnn_one_sr
+  epochs: 20
+  batch_size: 8192
+  lr: 0.001
+  weight_decay: 0.0001
+  hidden_layers: [256, 256, 128, 64, 32]
+  dropout: 0.05
+  activation: GELU
+  use_amp: true
+  device: auto
+  seed: 20260701
+
+plots:
+  max_features_per_page: 1
+  bins: 50
+  make_feature_svb_plots: true
+  make_training_plots: true
+  make_score_plots: true

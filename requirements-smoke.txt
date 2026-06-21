@@ -1,0 +1,9 @@
+# Minimal Python dependencies for scripts/smoke_one_sr_dnn.py
+# On lxplus, prefer an LCG CUDA/PyTorch view when using GPU.
+
+numpy
+pandas
+pyarrow
+matplotlib
+PyYAML
+torch
