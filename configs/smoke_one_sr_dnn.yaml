@@ -120,15 +120,19 @@ features:
     - "*truth*"
     - "*gen*"
     - "*Gen*"
-    # Region/channel bookkeeping or process-like flags: useful for monitoring,
-    # but not default flat-DNN physics inputs for a merged-SR SvB classifier.
-    - "*LeptonCategory*"
+    # Process-like or constant bookkeeping flags: useful for monitoring,
+    # but not default flat-DNN physics inputs.
     - "*Hcc_flag*"
+    - "*isBoostedTopology*"
+    - "*era*"
+
+  # Channel-aware DNN policy: allow reco channel indicators as model inputs.
+  # This is important when merging 0L/1L/2L SRs into one training phase space.
+  channel_input_patterns:
+    - "*LeptonCategory*"
     - "*isWLNuFlag*"
     - "*isZLLFlag*"
     - "*isZNuNuFlag*"
-    - "*isBoostedTopology*"
-    - "*era*"
 
   # Candidate weight columns. First existing column is used.
   weight_candidates:

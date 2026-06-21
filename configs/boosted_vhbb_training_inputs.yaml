@@ -22,15 +22,18 @@ phase_space:
   name: merged_boosted_SR_v1
   policy: merge_all_boosted_signal_regions
   description: >
-    All nominal boosted SR parquets are combined into one inclusive boosted training
-    phase space. Region/channel/pTV/jet-bin labels are retained for monitoring and
-    validation, not for splitting into independent v1 trainings.
+    Nominal boosted SR parquets are combined into one training phase space after
+    applying non-overlap region-selection rules. Region/channel/pTV/jet-bin labels
+    are retained for monitoring and validation. Channel labels may be used as model
+    inputs for a single channel-aware merged model.
   include_region_patterns:
-    - "SR_*_boosted*"
-  parquet_glob: "{columns_root}/*/SR_*_boosted*/nominal.parquet"
+    # Start with one mutually exclusive pT family for sufficient statistics.
+    - "SR_*_250_400_boosted_*J"
+  parquet_glob: "{columns_root}/*/SR_*_250_400_boosted_*J/nominal.parquet"
   train_separate_models_by_region: false
   train_separate_models_by_channel: false
   train_separate_models_by_pTV_bin: false
+  channel_aware_single_model: true
 
 inputs:
   layout: sample_region_nominal_parquet
@@ -63,6 +66,40 @@ inputs:
       GT1J: "*_GT1J"
       inclusive: fallback
 
+region_selection_rules:
+  principle: >
+    Region wildcards must be expanded into mutually exclusive event selections before
+    training. Do not combine overlapping region families in one input manifest unless
+    an explicit event-level de-duplication step is applied.
+  sufficient_stats_starting_family:
+    name: pTV_250_400_all_channels_all_jet_bins
+    include_region_patterns:
+      - "SR_*_250_400_boosted_*J"
+    interpretation: "Use all channels and jet bins in the 250 < pT(V) < 400 family."
+  high_pt_family:
+    name: pTV_GT400_all_channels_all_jet_bins
+    include_region_patterns:
+      - "SR_*_GT400_boosted*"
+    interpretation: "Use for the pT(V) > 400 family; treat as the high-pT complement above 250_400."
+  forbidden_mixes_without_deduplication:
+    - ["SR_*_boosted*", "any narrower boosted SR pattern"]
+    - ["SR_*_GT400_boosted*", "SR_*_400_600_boosted*", "SR_*_GT600_boosted*"]
+    - ["inclusive boosted region", "exclusive pTV or jet-bin region"]
+  event_deduplication:
+    required_if_multiple_region_families_are_combined: true
+    preferred_event_key:
+      - sample_name
+      - events_run
+      - events_luminosityBlock
+      - events_EventNr
+    fallback_event_key:
+      - sample_name
+      - region_name
+      - local_row_index
+    note: >
+      The fallback key is only for fold assignment when no event identifiers exist; it
+      does not prove that overlapping region families are de-duplicated.
+
 sample_groups:
   signal_VH_Hbb:
     label: 1
@@ -83,9 +120,14 @@ sample_groups:
     include_patterns:
       - "*WJets*"
       - "*WtoLNu*Jets*"
+      - "*WtoLNu-2Jets*"
+      - "*WtoENu*"
+      - "*WtoMuNu*"
+      - "*WtoTauNu*"
       - "*DYto2*"
       - "*ZJets*"
       - "*Zto2Nu*Jets*"
+      - "*Zto2Nu-2Jets*"
   background_top:
     label: 0
     include_patterns:
@@ -136,14 +178,15 @@ features:
     - year
     - era
   default_model_input_policy:
-    channel_metadata_as_inputs: false
+    channel_metadata_as_inputs: true
+    channel_input_encoding: one_hot_from_region_or_reco_flags
     region_metadata_as_inputs: false
     pTV_bin_metadata_as_inputs: false
     jet_bin_metadata_as_inputs: false
     note: >
-      For v1, all SRs are one phase space. Metadata is retained for plotting and
-      stability checks. If a model needs channel masks for missing features, document
-      that explicitly in the run config.
+      For v1, all selected SRs are one phase space. The merged DNN is channel-aware:
+      it may use one-hot channel inputs such as 0L/1L/2L or Wenu/Wmnu/Zee/Zmm/Znn.
+      pTV-bin and jet-bin labels stay as monitoring metadata unless explicitly enabled.
   high_level_groups:
     ak8_candidate:
       required_if_available:
