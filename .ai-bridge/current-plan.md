@@ -1,80 +1,57 @@
-# Use LCG-backed venv and start one-SR DNN smoke training
+# Rerun smoke with real V+jets backgrounds
 
-Updated: 2026-06-21T21:33:37.612Z
+Updated: 2026-06-21T21:56:53.785Z
 Workspace: /home/lzhang/lxplus/columns_final/VHbb-Boost-Training
 Target agent: lxplus local agent (custom)
 
 ## Plan
 
-Read the local-agent environment report and use the venv policy now added to the repo.
+The previous smoke runs proved that the venv, CUDA, parquet reading, plotting, preprocessing, and DNN training work. However, the output summaries show that the selected backgrounds were only `background_diboson`, not V+jets/top. Therefore the high AUC is a technical smoke-test result, not yet a real SvB benchmark.
 
-Start by reading:
+I updated `configs/smoke_one_sr_dnn.yaml` to:
 
-1. `docs/lxplus_venv_training_start.md`
-2. `README.md`
-3. `configs/smoke_one_sr_dnn.yaml`
-4. `scripts/smoke_one_sr_dnn.py`
-5. `.ai-bridge/boosted_training_handoff.md`
+1. include real W/Z+jets sample-name patterns seen in the mounted sample list, especially `WtoENu`, `WtoMuNu`, `WtoTauNu`, `WtoLNu-2Jets`, and `Zto2Nu-2Jets`;
+2. forbid channel/process-like flags from default flat-DNN inputs: `LeptonCategory`, `Hcc_flag`, `isWLNuFlag`, `isZLLFlag`, `isZNuNuFlag`, `isBoostedTopology`, and `era`.
 
-Environment conclusion from your report:
+Next task: rerun the wildcard smoke test and check that `background_Vjets` is now present in `sample_summary.json`.
 
-- Host `lxplus901.cern.ch` has a Tesla T4 GPU with 15.6 GB VRAM.
-- `nvidia-smi` works and GPU matmul passed.
-- `LCG_110_cuda` provides Python 3.13.11, torch 2.11.0, CUDA 12.5, numpy, pandas, pyarrow, matplotlib, and PyYAML.
-- Do not use bare system Python 3.9.
-- Do not pip-install torch.
-
-Use this venv policy:
+Use the same LCG-backed venv:
 
 ```bash
 cd /afs/cern.ch/work/l/lichengz/private/VHbb-Training/VHbb-Boost-Training
-
-source /cvmfs/sft.cern.ch/lcg/views/LCG_110_cuda/x86_64-el9-gcc13-opt/setup.sh
-python3 -m venv --system-site-packages .venv/lcg110-cuda
-source .venv/lcg110-cuda/bin/activate
-python3 -m pip install --upgrade pip
-```
-
-For every new shell after setup:
-
-```bash
 source /cvmfs/sft.cern.ch/lcg/views/LCG_110_cuda/x86_64-el9-gcc13-opt/setup.sh
 source .venv/lcg110-cuda/bin/activate
 ```
 
-Verify:
-
-```bash
-python3 - <<'PY'
-import torch, sys
-print(sys.version)
-print(torch.__version__)
-print(torch.version.cuda)
-print(torch.cuda.is_available())
-if torch.cuda.is_available():
-    print(torch.cuda.get_device_name(0))
-PY
-```
-
-Then run inspect-only first:
+First inspect-only:
 
 ```bash
 python3 scripts/smoke_one_sr_dnn.py \
   --config configs/smoke_one_sr_dnn.yaml \
-  --region SR_Wenu_250_400_boosted_0J \
-  --fraction 0.01 \
-  --max-events-per-class 20000 \
+  --region 'SR_*_250_400_boosted_*J' \
+  --fraction 0.05 \
+  --max-events-per-class 200000 \
   --inspect-only
 ```
 
-Check output JSONs and feature plots. If the branch/feature/weight selection looks good, run:
+Check `sample_summary.json`. We need to see at least:
+
+```text
+signal_VH_Hbb
+background_Vjets
+background_diboson
+```
+
+If V+jets still does not appear, inspect actual region names inside W/Z+jets sample directories and update sample/region matching.
+
+If inspect-only is good, run a corrected DNN smoke training:
 
 ```bash
 python3 scripts/smoke_one_sr_dnn.py \
   --config configs/smoke_one_sr_dnn.yaml \
-  --region SR_Wenu_250_400_boosted_0J \
-  --fraction 0.02 \
-  --max-events-per-class 50000 \
+  --region 'SR_*_250_400_boosted_*J' \
+  --fraction 0.20 \
+  --max-events-per-class 500000 \
   --epochs 20 \
   --batch-size 8192 \
   --device auto
@@ -82,16 +59,15 @@ python3 scripts/smoke_one_sr_dnn.py \
 
 Report back:
 
-- whether venv setup succeeded;
-- `torch.cuda.is_available()` and GPU name;
-- exact command used;
-- number of files/events discovered;
-- selected weight column;
-- selected event/fold column;
-- selected features before and after preprocessing;
-- validation loss/AUC from `metrics.json`;
-- whether feature/score plots look reasonable;
-- errors, warnings, or traceback.
+- process groups in `sample_summary.json`;
+- signal/background event counts and signed/abs weight sums;
+- selected features before preprocessing;
+- kept features after preprocessing;
+- whether pfcand/SV arrays are present but dropped by the flat DNN preprocessor;
+- validation loss/AUC;
+- whether the feature and score plots still look reasonable.
+
+Important interpretation: pfcand/SV columns appearing in selected branches is good news for the future ParT-Lite model. The current flat DNN smoke script cannot consume jagged/sequence arrays, so it drops them during preprocessing. Do not remove those branches from the ntuples.
 
 ## Implementation contract
 

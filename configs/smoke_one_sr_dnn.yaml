@@ -40,9 +40,14 @@ samples:
     include_patterns:
       - "*WJets*"
       - "*WtoLNu*Jets*"
+      - "*WtoLNu-2Jets*"
+      - "*WtoENu*"
+      - "*WtoMuNu*"
+      - "*WtoTauNu*"
       - "*DYto2*"
       - "*ZJets*"
       - "*Zto2Nu*Jets*"
+      - "*Zto2Nu-2Jets*"
 
   background_top:
     label: 0
@@ -115,6 +120,15 @@ features:
     - "*truth*"
     - "*gen*"
     - "*Gen*"
+    # Region/channel bookkeeping or process-like flags: useful for monitoring,
+    # but not default flat-DNN physics inputs for a merged-SR SvB classifier.
+    - "*LeptonCategory*"
+    - "*Hcc_flag*"
+    - "*isWLNuFlag*"
+    - "*isZLLFlag*"
+    - "*isZNuNuFlag*"
+    - "*isBoostedTopology*"
+    - "*era*"
 
   # Candidate weight columns. First existing column is used.
   weight_candidates:
