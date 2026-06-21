@@ -2,26 +2,20 @@
 
 Training framework for boosted VHbb signal-vs-background discriminants.
 
-This repository is the working area for code, configs, visualization outputs, and coordination plans. The parquet column inputs are mounted read-only outside the repo.
+This repository is the working area for code, configs, and coordination plans. The parquet column inputs are mounted read-only outside the repo.
 
-## Current v1 plan
+## Current starting point
 
-The first training iteration is:
+The first target is a **high-level boosted VHbb SvB baseline**:
 
 ```text
-phase space: one merged boosted-SR phase space
-models:      plain DNN baseline vs ParT-Lite+MHA target NN
-folding:     two-fold even/odd out-of-fold production
-output:      score_dnn_v1 and score_partlite_mha_v1
+signal:     VH, H → bb, boosted AK8 topology
+background: V+jets, top, diboson, optional QCD
+model:      high-level MLP baseline
+output:     score_svb_boosted_v0
 ```
 
-Important details:
-
-- All `SR_*_boosted*` nominal parquet files are merged into one inclusive boosted training phase space.
-- The plain DNN is required as a transparent comparison baseline.
-- The ParT-Lite+MHA model is the target improved neural network.
-- Final production uses even/odd two-fold application, not a final held-out test dataset.
-- Visualization plots are mandatory at every step.
+The first milestone is deliberately not a full ParT-lite particle-cloud model. The first milestone is a robust high-level training pipeline from the existing parquet columns. ParT-lite is kept as a later milestone if AK8 constituent and secondary-vertex jagged arrays are available.
 
 ## Important paths
 
@@ -61,12 +55,11 @@ Local-agent handoff:
 ## Intended implementation order
 
 ```text
-M0: manifest and parquet column report
-M1: feature map and pretraining visualization
-M2: two-fold dataset and dataloader
-M3: plain DNN training and out-of-fold application
-M4: ParT-Lite+MHA training and out-of-fold application
-M5: DNN vs ParT-Lite+MHA comparison and physics validation
+M0: manifest and parquet column inspection
+M1: high-level dataloader and feature mapping
+M2: high-level MLP baseline training
+M3: physics validation plots
+M4: lxplus wrapper scripts for local agent execution
 ```
 
 See `.ai-bridge/boosted_training_handoff.md` for the concrete task list.
