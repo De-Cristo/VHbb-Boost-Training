@@ -132,7 +132,8 @@ def find_parquet_files(columns_root: Path, region: str, sample_cfg: Dict[str, An
             continue
         process_group, label = cls
 
-        region_dirs = [p for p in sample_dir.rglob("*") if p.is_dir() and fnmatch.fnmatch(p.name, region)]
+        regions_list = [r.strip() for r in region.split(',')]
+        region_dirs = [p for p in sample_dir.rglob("*") if p.is_dir() and any(fnmatch.fnmatch(p.name, r) for r in regions_list)]
         for region_dir in region_dirs:
             actual_region = region_dir.name
             files = sorted(region_dir.rglob("*.parquet"))

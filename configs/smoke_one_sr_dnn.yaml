@@ -125,6 +125,7 @@ features:
     - "*Hcc_flag*"
     - "*isBoostedTopology*"
     - "*era*"
+    - "*PNetHbb*"
 
   # Channel-aware DNN policy: allow reco channel indicators as model inputs.
   # This is important when merging 0L/1L/2L SRs into one training phase space.
